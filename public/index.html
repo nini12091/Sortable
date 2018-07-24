@@ -372,7 +372,7 @@ PC.init = function(){
 		.attr("class", "brush")
 		.each(function(field){
 			d3.select(this)
-				.call(PC.y[field].brush = d3.brushY().extent([[-8, 0], [8, PC.height]]).on("brush", PC.brush(field)));
+				.call(PC.y[field].brush = d3.brushY().extent([[-12, 0], [12, PC.height]]).on("brush", PC.brush(field)));
 		});
 
 	PC.update();
