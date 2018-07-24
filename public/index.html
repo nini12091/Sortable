@@ -116,13 +116,16 @@ d3.csv("data.csv").then(function(data){
 		});
 	});
 
+	Data.headerId = {};
+	Data.headers.forEach(function(field){ Data.headerId[field] = Data.headers.indexOf(field); });
+
 	// formatting cell
 	data.forEach(function(d, i){
 		d3.keys(d).forEach(function(field){
 			d[field] = {
 				id: i,
 				field: field,
-				col: Data.headers.indexOf(field),
+				col: Data.headerId[field],
 				value: d[field],
 				visible: true,
 				active: false,
@@ -214,21 +217,21 @@ Table.sort = Control.sortRelative;
 Table.init = function(){
 	Table.head.append("tr")
 			.selectAll("th")
-			.data(Data.headers.map(function(field){ return { field: field, ascending: true }; }))
+			.data(Data.headers.map(function(field){ return { field: field, col: Data.headerId[field], ascending: true }; }))
 		.enter().append("th")
-			.attr("class", "noselect")
+			.attr("class", function(d){ return "header header-col-" + d.col + " noselect"; })
 			.style("text-align", function(d, i){ return i == 0 ? "left" : "center"; }) // align center except first field "name"
 			.text(function(d){ return d.field; })
-			.on("click", function(d){
-				// toggle ascend or descend
-				d.ascending = !d.ascending;
-				Table.sort(d.field, d.ascending);
-			})
 			.on("mouseover", function(d){
 				d3.selectAll(".cell-col-" + d.col).classed("cell-hover", true);
 			})
 			.on("mouseout", function(d){
 				d3.selectAll(".cell-col-" + d.col).classed("cell-hover", false);
+			})
+			.on("click", function(d){
+				// toggle ascend or descend
+				d.ascending = !d.ascending;
+				Table.sort(d.field, d.ascending);
 			})
 		.append("i")
 			.style("font-weight", "bolder")
