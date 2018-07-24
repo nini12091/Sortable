@@ -279,6 +279,14 @@ PC.height = PC.el.attr("height") - PC.margin.top - PC.margin.bottom;
 PC.svg = PC.el.append("g").attr("transform", "translate(" + PC.margin.left + "," + PC.margin.top + ")");
 PC.g = {};
 
+// currently dragging axis
+PC.dragging = {};
+
+// position contains dragging
+PC.position = function(field){
+	return field in PC.dragging ? PC.dragging[field] : PC.x(field);
+}
+
 PC.axis = d3.axisLeft();
 PC.line = d3.line();
 
@@ -340,7 +348,7 @@ PC.init = function(){
 			.nice();
 	});
 
-	PC.path = function(d){ return PC.line(PC.headers.map(function(field){ return [PC.x(field), PC.y[field](d[field].value)]; })); };
+	PC.path = function(d){ return PC.line(PC.headers.map(function(field){ return [PC.position(field), PC.y[field](d[field].value)]; })); };
 	PC.g.background = PC.svg.append("g")
 			.attr("class", "background")
 			.selectAll("path")
@@ -356,7 +364,31 @@ PC.init = function(){
 	PC.g.axis = PC.svg.selectAll(".header")
 			.data(PC.headers)
 		.enter().append("g")
-			.attr("class", "header");
+			.attr("class", "header")
+			.call(d3.drag()
+				.subject(function(){ return d3.select(this); })
+				.on("start", function(field){
+					PC.dragging[field] = PC.x(field);
+					PC.g.background.attr("visibility", "hidden");
+				})
+				.on("drag", function(field){
+					PC.dragging[field] = Math.min(PC.width, Math.max(-1, d3.event.x));
+					PC.g.foreground.attr("d", PC.path);
+					PC.headers.sort(function(a, b){ return PC.position(a) - PC.position(b); });
+					PC.x.domain(PC.headers);
+					PC.g.axis.attr("transform", function(field){ return "translate(" + PC.position(field) + ")"; });
+				})
+				.on("end", function(field){
+					delete PC.dragging[field];
+					d3.select(this).transition().attr("transform", "translate(" + PC.x(field) + ")");
+					PC.g.foreground.transition().attr("d", PC.path);
+					PC.g.background
+							.attr("d", PC.path)
+						.transition()
+							.delay(500)
+							.duration(0)
+							.attr("visibility", null);
+				}));
 
 	PC.g.axis.append("g")
 			.attr("class", "axis")
