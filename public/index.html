@@ -77,6 +77,7 @@
 		<!-- sortable -->
 		<table id="sortable" class="sortable table table-bordered table-sm">
 			<thead>
+				<tr></tr>
 			</thead>
 			<tbody>
 			</tbody>
@@ -215,10 +216,18 @@ Table.body = Table.el.select("tbody");
 Table.sort = Control.sortRelative;
 
 Table.init = function(){
-	Table.head.append("tr")
-			.selectAll("th")
-			.data(Data.headers.map(function(field){ return { field: field, col: Data.headerId[field], ascending: true }; }))
-		.enter().append("th")
+	Table.head.select("tr")
+		.selectAll("th")
+			.data(Data.headers.map(function(field){ return {
+				field: field,
+				col: Data.headerId[field],
+				ascending: true
+			}; }))
+		.enter().append("th");
+
+	Table.head.select("tr")
+		.selectAll("th")
+			// .data(function(field){ return { field: field, col: Data.headerId[field], ascending: true }; })
 			.attr("class", function(d){ return "header header-col-" + d.col + " noselect"; })
 			.style("text-align", function(d, i){ return i == 0 ? "left" : "center"; }) // align center except first field "name"
 			.text(function(d){ return d.field; })
@@ -267,7 +276,7 @@ Table.display = function(){
 
 	Table.body.selectAll("tr")
 		.selectAll("td")
-		.data(function(d){ return d3.values(d); })
+		.data(function(d){ return Data.headers.map(function(field){ return d[field]; }); })
 		.attr("class", function(d){ return "cell-col-" + d.col + " cell-row-" + d.id; })
 		.classed("cell-active", function(d){ return d.active; })
 		.style("background-color", function(d){ return d.color; })
@@ -289,7 +298,7 @@ PC.dragging = {};
 // position contains dragging
 PC.position = function(field){
 	return field in PC.dragging ? PC.dragging[field] : PC.x(field);
-}
+};
 
 PC.axis = d3.axisLeft();
 PC.line = d3.line();
@@ -378,9 +387,15 @@ PC.init = function(){
 				.on("drag", function(field){
 					PC.dragging[field] = Math.min(PC.width, Math.max(-1, d3.event.x));
 					PC.g.foreground.attr("d", PC.path);
-					PC.headers.sort(function(a, b){ return PC.position(a) - PC.position(b); });
+
+					// Update headers order
+					Data.headers = [Data.headers[0]].concat(PC.headers.sort(function(a, b){ return PC.position(a) - PC.position(b); }));
+
 					PC.x.domain(PC.headers);
 					PC.g.axis.attr("transform", function(field){ return "translate(" + PC.position(field) + ")"; });
+
+					// Update table (for columns order)
+					Table.init();
 				})
 				.on("end", function(field){
 					delete PC.dragging[field];
