@@ -91,7 +91,7 @@ var table = d3.select("#sortable");
 const Data = {};
 Data.headers = [];
 Data.origin = [];
-Data.current = [];
+Data.current = []; // filtered data
 
 // initialize sort buttons
 d3.selectAll("input[name='mode']")
@@ -141,6 +141,9 @@ d3.csv("data.csv").then(function(data){
 const Control = {};
 
 Control.reset = function(){
+	// reset filtered data first
+	PC.reset();
+
 	d3.selectAll(".cell-active")
 		.style("background-color", null)
 		.each(function(d){
@@ -148,8 +151,6 @@ Control.reset = function(){
 			d.color = null;
 		})
 		.classed("cell-active", false);
-
-	PC.reset();
 
 	Table.sort = Control.sortRelative;
 	Table.sort(d3.keys(Data.origin[0])[0], true); // sort by first field "name"
