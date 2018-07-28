@@ -58,20 +58,20 @@
 	</style>
 </head>
 <body>
-	<div class="container">
+	<div id="layout">
 		<!-- header -->
 		<h1 class="display-5 my-3 py-3">Sortable</h1>
 
 		<!-- control buttons -->
-		<button type="button" onclick="Control.reset()">Reset</button>
+		<button type="button" onclick="Data.reset()">Reset</button>
 
 		<!-- parallel coordinates -->
-		<svg width="960" height="540"></svg>
+		<svg id="pc" width="960" height="540"></svg>
 
 		<!-- sort buttons -->
 		<form class="mt-3">
-			<label><input type="radio" value="sortRelative" name="mode" checked> Sort_relative </label>
-			<label><input type="radio" value="sortParallel" name="mode"> Sort_parallel </label>
+			<label><input id="sort-relative" type="radio" value="sortRelative" name="mode" checked> Sort relative </label>
+			<label><input id="sort-parallel" type="radio" value="sortParallel" name="mode"> Sort parallel </label>
 		</form>
 
 		<!-- sortable -->
@@ -87,18 +87,71 @@
 <script src="https://d3js.org/d3.v5.min.js"></script>
 <script type="text/javascript">
 
-var table = d3.select("#sortable");
+const Control = {};
+Control.reset = function(){
+	// reset filtered data first
+	PC.reset();
+
+	d3.selectAll(".cell-active")
+		.style("background-color", null)
+		.each(function(d){
+			d.active = false;
+			d.color = null;
+		})
+		.classed("cell-active", false);
+
+	table.sort = Control.sortRelative;
+	table.sort(d3.keys(Data.origin[0])[0], true); // sort by first field "name"
+};
 
 const Data = {};
 Data.headers = [];
 Data.origin = [];
 Data.current = []; // filtered data
+Data.reset = function(){
+	Data.current = Data.origin.map(function(d){ return d; });
+};
+Data.ascend = function(a, b){
+	return (a.value > b.value ? true : a.value < b.value ? false : a.id > b.id) ^ true ? -1 : 1;
+};
+Data.descend = function(a, b){
+	return (a.value > b.value ? true : a.value < b.value ? false : a.id > b.id) ^ false ? -1 : 1;
+};
+Data.sortRelative = function(field, order){
+	var related = {};
+	Data.current.forEach(function(d){
+		d3.keys(d).forEach(function(field){
+			var id = d[field].id;
+			if(!(id in related)){
+				related[id] = {};
+				Data.headers.forEach(function(field){ related[id][field] = null; });
+			}
+			related[id][field] = d[field];
+		});
+	});
+	Data.current = d3.values(related).sort(function(a, b){ return order(a[field], b[field]); });
+};
+Data.sortParallel = function(field, order){
+	Data.current.map(function(d){
+		// pick field
+		return d[field];
+	}).sort(order).forEach(function(d, i){
+		Data.current[i][field] = d;
+	});
+
+	d3.selectAll(".cell-sort").select(function(d){
+		return d.field == field ? this : null;
+	}).attr("class", function(d){
+		return "cell-sort fa fa-angle-" + (ascending ? "up" : "down") + " text-success";
+	});
+};
+Data.sort = Data.sortRelative;
 
 // initialize sort buttons
-d3.selectAll("input[name='mode']")
-	.on("change", function(d){
-		Table.sort = Control[d3.select(this).attr("value")];
-	});
+d3.select("#sort-relative").on("change", function(){ Data.sort = Data.sortRelative; });
+d3.select("#sort-parallel").on("change", function(){ Data.sort = Data.sortParallel; });
+
+var table, pc;
 
 // Load data from assets
 d3.csv("data.csv").then(function(data){
@@ -136,87 +189,17 @@ d3.csv("data.csv").then(function(data){
 	});
 
 	// plot
-	Table.init();
-	PC.init();
+	table = new Table("#sortable");
+	pc = new PC("#pc");
 });
 
 
+function Table(table){
+	this.el.table = d3.select(table);
+	this.el.head = this.el.table.select("thead");
+	this.el.body = this.el.table.select("tbody");
 
-const Control = {};
-
-Control.reset = function(){
-	// reset filtered data first
-	PC.reset();
-
-	d3.selectAll(".cell-active")
-		.style("background-color", null)
-		.each(function(d){
-			d.active = false;
-			d.color = null;
-		})
-		.classed("cell-active", false);
-
-	Table.sort = Control.sortRelative;
-	Table.sort(d3.keys(Data.origin[0])[0], true); // sort by first field "name"
-};
-
-Control.sortRelative = function(field, ascending = true){
-	var related = {};
-	Data.current.forEach(function(d){
-		d3.keys(d).forEach(function(field){
-			var id = d[field].id;
-			if(!(id in related)){
-				related[id] = {};
-				Data.headers.forEach(function(field){ related[id][field] = null; });
-			}
-			related[id][field] = d[field];
-		});
-	});
-	Data.current = d3.values(related).sort(function(a, b){
-		return (a[field].value > b[field].value ? true : a[field].value < b[field].value ? false : a[field].id > b[field].id) ^ ascending ? -1 : 1;
-	});
-
-	// process sort buttons (toggle status)
-	d3.selectAll(".cell-sort").attr("class", function(d){
-		if(d.field == field){
-			return "cell-sort fa fa-angle-" + (ascending ? "up" : "down") + " text-success";
-		}
-		d.ascending = true;
-		return "cell-sort fa fa-angle-up";
-	});
-
-	Table.display();
-};
-
-Control.sortParallel = function(field, ascending = true){
-	Data.current.map(function(d){
-		// pick field
-		return d[field];
-	}).sort(function(a, b){
-		// sort
-		return (a.value > b.value ? true : a.value < b.value ? false : a.id > b.id) ^ ascending ? -1 : 1;
-	}).forEach(function(d, i){
-		Data.current[i][field] = d;
-	});
-
-	d3.selectAll(".cell-sort").select(function(d){
-		return d.field == field ? this : null;
-	}).attr("class", function(d){
-		return "cell-sort fa fa-angle-" + (ascending ? "up" : "down") + " text-success";
-	});
-
-	Table.display();
-};
-
-
-const Table = {};
-Table.el = d3.select("#sortable");
-Table.head = Table.el.select("thead");
-Table.body = Table.el.select("tbody");
-Table.sort = Control.sortRelative;
-
-Table.init = function(){
-	Table.head.select("tr")
+	this.el.head.select("tr")
 		.selectAll("th")
 			.data(Data.headers.map(function(field){ return {
 				field: field,
@@ -225,7 +208,7 @@ Table.init = function(){
 			}; }))
 		.enter().append("th");
 
-	Table.head.select("tr")
+	this.el.head.select("tr")
 		.selectAll("th")
 			// .data(function(field){ return { field: field, col: Data.headerId[field], ascending: true }; })
 			.attr("class", function(d){ return "header header-col-" + d.col + " noselect"; })
@@ -237,20 +220,26 @@ Table.init = function(){
 			.on("mouseout", function(d){
 				d3.selectAll(".cell-col-" + d.col).classed("cell-hover", false);
 			})
-			.on("click", function(d){
+			.on("click", (d) => {
 				// toggle ascend or descend
 				d.ascending = !d.ascending;
-				Table.sort(d.field, d.ascending);
+				Data.sort(d.field, d.ascending ? Data.ascend : Data.descend);
+
+				// process sort buttons (toggle status)
+				var field = d.field, ascending = d.ascending;
+				d3.selectAll(".cell-sort").attr("class", function(d){
+					if(d.field == field){
+						return "cell-sort fa fa-angle-" + (ascending ? "up" : "down") + " text-success";
+					}
+					d.ascending = true;
+					return "cell-sort fa fa-angle-up";
+				});
 			})
 		.append("i")
 			.style("font-weight", "bolder")
 			.attr("class", "cell-sort fa fa-angle-up");
 
-	Table.display();
-};
-
-Table.display = function(){
-	var rows = Table.body.selectAll("tr")
+	var rows = this.el.body.selectAll("tr")
 		.data(Data.current);
 
 	rows.exit().remove();
@@ -274,44 +263,165 @@ Table.display = function(){
 					.style("background-color", function(d){ return d.color; });
 			});
 
-	Table.body.selectAll("tr")
+	this.el.body.selectAll("tr")
 		.selectAll("td")
 		.data(function(d){ return Data.headers.map(function(field){ return d[field]; }); })
 		.attr("class", function(d){ return "cell-col-" + d.col + " cell-row-" + d.id; })
 		.classed("cell-active", function(d){ return d.active; })
 		.style("background-color", function(d){ return d.color; })
 		.text(function(d){ return d.value; });
-};
+}
+
+Table.prototype.el = {};
+
+Table.prototype.headers = function(headers){
+	if(headers) this._headers = headers;
+	else return this._headers;
+}
+
+Table.prototype.width = function(width){
+	if(width) this._width = width - this.margin.left - this.margin.right;
+	else return this._width;
+}
+
+Table.prototype.height = function(height){
+	if(height) this._height = height - this.margin.top - this.margin.bottom;
+	else return this._height;
+}
 
 // Parallel Coordinates
-const PC = {};
-PC.el = d3.select("svg");
-PC.margin = { top: 40, right: 10, bottom: 20, left: 20 };
-PC.width = PC.el.attr("width") - PC.margin.left - PC.margin.right;
-PC.height = PC.el.attr("height") - PC.margin.top - PC.margin.bottom;
-PC.svg = PC.el.append("g").attr("transform", "translate(" + PC.margin.left + "," + PC.margin.top + ")");
-PC.g = {};
+function PC(svg){
+	this.el.svg = d3.select(svg);
 
-// currently dragging axis
-PC.dragging = {};
+	this.width(this.el.svg.attr("width"));
+	this.height(this.el.svg.attr("height"));
+
+	this.el.g = this.el.svg.append("g").attr("transform", "translate(" + this.margin.left + "," + this.margin.top + ")");
+
+	this.headers = Data.headers.filter(function(field, i){ return i != 0; }); // except first field "name"
+
+	this.x = d3.scaleBand().domain(this.headers).range([0, this.width()]);
+	this.y = {};
+
+	this.headers.forEach((field) => {
+		this.y[field] = d3.scaleLinear()
+			.domain(d3.extent(Data.origin, function(d){ return +d[field].value; }))
+			.range([this.height(), 0])
+			.nice();
+	});
+
+	this.el.background = this.el.g.append("g")
+			.attr("class", "background")
+			.selectAll("path")
+			.data(Data.origin)
+		.enter().append("path");
+
+	this.el.foreground = this.el.g.append("g")
+			.attr("class", "foreground")
+			.selectAll("path")
+			.data(Data.origin)
+		.enter().append("path");
+
+	var _this = this;
+	this.el.axis = this.el.g.selectAll(".header")
+			.data(this.headers)
+		.enter().append("g")
+			.attr("class", "header")
+			.call(d3.drag()
+				.subject(() => { return d3.select(this); })
+				.on("start", (field) => {
+					this.dragging[field] = this.x(field);
+					this.el.background.attr("visibility", "hidden");
+				})
+				.on("drag", (field) => {
+					this.dragging[field] = Math.min(this.width(), Math.max(-1, d3.event.x));
+					this.el.foreground.attr("d", (d) => this.path(d));
+
+					// Update headers order
+					Data.headers = [Data.headers[0]].concat(this.headers.sort((a, b) => { return this.position(a) - this.position(b); }));
+
+					this.x.domain(this.headers);
+					this.el.axis.attr("transform", (field) => { return "translate(" + this.position(field) + ")"; });
+				})
+				.on("end", function(field){
+					delete _this.dragging[field];
+					d3.select(this).transition().attr("transform", "translate(" + _this.x(field) + ")");
+					_this.el.foreground.transition().attr("d", (d) => _this.path(d));
+					_this.el.background
+							.attr("d", (d) => _this.path(d))
+						.transition()
+							.delay(500)
+							.duration(0)
+							.attr("visibility", null);
+				}));
+
+	this.el.axis.append("g")
+			.attr("class", "axis")
+			.each(function(field){ d3.select(this).call(_this.axis.scale(_this.y[field])); })
+		.append("text")
+			.style("text-anchor", "middle")
+			.style("font-size", "1.5em")
+			.attr("fill", "black")
+			.attr("y", -9)
+			.text(function(field){ return field; });
+
+	this.el.brush = this.el.axis.append("g")
+		.attr("class", "brush")
+		.each(function(field){
+			d3.select(this)
+				.call(_this.y[field].brush = d3.brushY().extent([[-12, 0], [12, _this.height()]]).on("brush", _this.brush(field)));
+		});
+
+	this.updateLines();
+}
+
+PC.prototype.el = {};
+
+PC.prototype.margin = { top: 40, right: 10, bottom: 20, left: 20 };
+
+PC.prototype.width = function(width){
+	if(width) this._width = width;
+	else return this._width;
+}
+
+PC.prototype.height = function(height){
+	if(height) this._height = height;
+	else return this._height;
+}
+
+PC.prototype.dragging = {}; // currently dragging axis
+
+PC.prototype.axis = d3.axisLeft();
+
+PC.prototype.line = d3.line();
+
+PC.prototype.path = function(d){
+	return this.line(this.headers.map((field) => {
+		return [this.position(field), this.y[field](d[field].value)];
+	}));
+}
 
 // position contains dragging
-PC.position = function(field){
-	return field in PC.dragging ? PC.dragging[field] : PC.x(field);
-};
+PC.prototype.position = function(field){
+	return field in this.dragging ? this.dragging[field] : this.x(field);
+}
 
-PC.axis = d3.axisLeft();
-PC.line = d3.line();
+PC.prototype.updateLines = function(){
+	this.el.background.attr("d", (d) => this.path(d));
+	this.el.foreground.attr("d", (d) => this.path(d));
 
-PC.brush = function(field){
-	return function(){
-		PC.y[field].selection = d3.event.selection;
-		var actives = PC.headers.filter(function(field){ return PC.y[field].selection; });
+	this.el.axis.attr("transform", (d) => { return "translate(" + this.x(d) + ")"; });
+}
+
+PC.prototype.brush = function(field){
+	return () => {
+		this.y[field].selection = d3.event.selection;
+		var actives = this.headers.filter((field) => { return this.y[field].selection; });
 
 		var visible = {};
-		PC.g.foreground.style("display", function(d){
-			return visible[d[PC.headers[0]].id] = actives.every(function(field, i){
-				return PC.y[field].selection[0] <= PC.y[field](d[field].value) && PC.y[field](d[field].value) <= PC.y[field].selection[1];
+		this.el.foreground.style("display", (d) => {
+			return visible[d[this.headers[0]].id] = actives.every((field, i) => {
+				return this.y[field].selection[0] <= this.y[field](d[field].value) && this.y[field](d[field].value) <= this.y[field].selection[1];
 			}) ? null : "none";
 		});
 
@@ -334,106 +444,15 @@ PC.brush = function(field){
 			});
 			Data.current.push(d);
 		}
-
-		// plot data
-		Table.display();
 	};
-};
+}
 
-PC.update = function(){
-	PC.g.background.attr("d", PC.path);
-
-	PC.g.foreground.attr("d", PC.path);
-
-	PC.g.axis.attr("transform", function(d){ return "translate(" + PC.x(d) + ")"; });
-};
-
-PC.init = function(){
-	PC.headers = Data.headers.filter(function(field, i){ return i != 0; }); // except first field "name"
-
-	PC.x = d3.scaleBand().domain(PC.headers).range([0, PC.width]);
-	PC.y = {};
-
-	PC.headers.forEach(function(field){
-		PC.y[field] = d3.scaleLinear()
-			.domain(d3.extent(Data.origin, function(d){ return +d[field].value; }))
-			.range([PC.height, 0])
-			.nice();
+PC.prototype.reset = function(){
+	var _this = this;
+	this.el.brush.each(function(field){
+		d3.select(this).call(_this.y[field].brush.move, null);
 	});
-
-	PC.path = function(d){ return PC.line(PC.headers.map(function(field){ return [PC.position(field), PC.y[field](d[field].value)]; })); };
-	PC.g.background = PC.svg.append("g")
-			.attr("class", "background")
-			.selectAll("path")
-			.data(Data.origin)
-		.enter().append("path");
-
-	PC.g.foreground = PC.svg.append("g")
-			.attr("class", "foreground")
-			.selectAll("path")
-			.data(Data.origin)
-		.enter().append("path");
-
-	PC.g.axis = PC.svg.selectAll(".header")
-			.data(PC.headers)
-		.enter().append("g")
-			.attr("class", "header")
-			.call(d3.drag()
-				.subject(function(){ return d3.select(this); })
-				.on("start", function(field){
-					PC.dragging[field] = PC.x(field);
-					PC.g.background.attr("visibility", "hidden");
-				})
-				.on("drag", function(field){
-					PC.dragging[field] = Math.min(PC.width, Math.max(-1, d3.event.x));
-					PC.g.foreground.attr("d", PC.path);
-
-					// Update headers order
-					Data.headers = [Data.headers[0]].concat(PC.headers.sort(function(a, b){ return PC.position(a) - PC.position(b); }));
-
-					PC.x.domain(PC.headers);
-					PC.g.axis.attr("transform", function(field){ return "translate(" + PC.position(field) + ")"; });
-
-					// Update table (for columns order)
-					Table.init();
-				})
-				.on("end", function(field){
-					delete PC.dragging[field];
-					d3.select(this).transition().attr("transform", "translate(" + PC.x(field) + ")");
-					PC.g.foreground.transition().attr("d", PC.path);
-					PC.g.background
-							.attr("d", PC.path)
-						.transition()
-							.delay(500)
-							.duration(0)
-							.attr("visibility", null);
-				}));
-
-	PC.g.axis.append("g")
-			.attr("class", "axis")
-			.each(function(field){ d3.select(this).call(PC.axis.scale(PC.y[field])); })
-		.append("text")
-			.style("text-anchor", "middle")
-			.style("font-size", "1.5em")
-			.attr("fill", "black")
-			.attr("y", -9)
-			.text(function(field){ return field; });
-
-	PC.g.brush = PC.g.axis.append("g")
-		.attr("class", "brush")
-		.each(function(field){
-			d3.select(this)
-				.call(PC.y[field].brush = d3.brushY().extent([[-12, 0], [12, PC.height]]).on("brush", PC.brush(field)));
-		});
-
-	PC.update();
-};
-
-PC.reset = function(){
-	PC.g.brush.each(function(field){
-		d3.select(this).call(PC.y[field].brush.move, null);
-	});
-};
+}
 
 </script>
 </html>
