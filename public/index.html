@@ -12,11 +12,10 @@
 	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 
 	<style>
-		th {
-			background-color: #4d4d4d;
-			font-size: 1em;
-			font-weight: normal;
-			color: white;
+		.title {
+			font-size: 48px;
+			fill: black;
+			alignment-baseline: hanging;
 		}
 
 		.cell {
@@ -82,6 +81,10 @@
 			stroke: steelblue;
 		}
 
+		.controller {
+
+		}
+
 		.controller-btn {
 			color: #f2f2f2;
 			fill: #333;
@@ -107,18 +110,6 @@
 </head>
 <body>
 	<div class="container-fluid">
-		<!-- header -->
-		<h1 class="display-5 my-3 py-3">Sortable</h1>
-
-		<!-- control buttons -->
-		<button type="button" onclick="Data.reset()">Reset</button>
-
-		<!-- sort buttons -->
-		<!-- <form class="mt-3">
-			<label><input id="sort-relative" type="radio" value="sortRelative" name="mode" checked> Sort relative </label>
-			<label><input id="sort-parallel" type="radio" value="sortParallel" name="mode"> Sort parallel </label>
-		</form> -->
-
 		<div id="controller"></div>
 
 		<div id="layout">
@@ -131,6 +122,11 @@
 	</div>
 </body>
 <script src="https://d3js.org/d3.v5.min.js"></script>
+<script type="text/javascript">
+
+"use strict";
+
+</script>
 <script src="Data.js"></script>
 <script src="Table.js"></script>
 <script src="PC.js"></script>
@@ -139,16 +135,49 @@
 function Controller(options){
 	var bindto = options.bindto;
 	var data = options.data;
-	var height = options.height || 40;
+	var titleHeight = options.titleHeight || 60;
+	var toolsWidth = options.toolsWidth || 90;
+	var toolsHeight = options.toolsHeight || 30;
+	var headersHeight = options.headersHeight || 40;
 
 	this.el.root = d3.select(bindto).append("svg");
 	this.data = data;
-	this._height = height;
+	this._height = titleHeight + toolsHeight + headersHeight;
+	this.titleHeight = titleHeight;
+	this.toolsHeight = toolsHeight;
+	this.toolsWidth = toolsWidth;
+	this.headersHeight = headersHeight;
 
 	d3.select(this.el.root.node().parentNode)
 			.attr("class", "controller position-sticky sticky-top mx-auto noselect");
 
-	this.el.headers = this.el.root.selectAll("g")
+	this.el.title = this.el.root.append("g");
+
+	this.el.title.append("text")
+		.attr("class", "title")
+		.text("Sortable");
+
+	this.el.tools = this.el.root.append("g")
+			.attr("transform", "translate(0," + this.titleHeight + ")")
+			.selectAll("g")
+			.data([
+				{ name: "Reset", onclick: () => { this.reset(); } }
+			])
+		.enter().append("g")
+			.attr("class", "controller-btn")
+			.on("click", function(d){ d.onclick(); });
+
+	this.el.tools.append("rect")
+		.attr("width", this.toolsWidth)
+		.attr("height", this.toolsHeight);
+
+	this.el.tools.append("text")
+		.text(function(d){ return d.name; })
+		.attr("x", (d, i) => { return i * this.toolsWidth + this.toolsWidth / 2; })
+		.attr("y", this.toolsHeight / 2);
+
+	this.el.headers = this.el.root.append("g")
+			.selectAll("g")
 			.data(this.data.headers)
 		.enter().append("g")
 			.attr("class", "controller-btn")
@@ -159,17 +188,20 @@ function Controller(options){
 					: this.data.ascend);
 			});
 
-	this.el.headers.append("rect");
+	this.el.headers.append("rect")
+			.attr("height", this.headersHeight);
 
 	this.el.texts = this.el.headers.append("text")
 			.attr("class", "header-text")
-			.text(function(header){ return header.name; });
+			.text(function(header){ return header.name; })
+			.attr("y", this.headersHeight / 2);
 
 	this.el.sorts = this.el.headers.append("text")
 			.attr("class", "header-icon")
 			.attr("font-family", "FontAwesome")
 			.attr("text-anchor", "end")
-			.attr("dominant-baseline", "central");
+			.attr("dominant-baseline", "central")
+			.attr("y", this.headersHeight / 2);
 
 	this.updateSize();
 
@@ -206,6 +238,8 @@ Controller.prototype.updateSize = function(){
 	var width = this._width, height = this._height;
 	if(width === undefined || height === undefined) return;
 
+	var self = this;
+
 	this.el.root
 		.attr("width", width)
 		.attr("height", height);
@@ -215,9 +249,8 @@ Controller.prototype.updateSize = function(){
 	this.el.headers
 		.each(function(header){
 			d3.select(this)
-				.attr("transform", "translate(" + nestedWidth + ")")
+				.attr("transform", "translate(" + nestedWidth + "," + (self.titleHeight + self.toolsHeight) +  ")")
 				.select("rect")
-					.attr("height", height)
 					.attr("width", (header) => {
 						header.x = nestedWidth;
 						header.width = (header.weight / length) * width
@@ -227,15 +260,10 @@ Controller.prototype.updateSize = function(){
 		});
 
 	this.el.texts
-		.attr("x", function(header){
-			return header.width / 2;
-		})
-		.attr("y", height / 2);
+		.attr("x", function(header){ return header.width / 2; })
 
 	this.el.sorts
-		.attr("x", function(header){
-			return header.width - 12;
-		})
+		.attr("x", function(header){ return header.width - 12; })
 		.attr("y", height / 2);
 }
 
