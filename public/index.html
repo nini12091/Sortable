@@ -145,9 +145,10 @@ function Controller(options){
 	this.data = data;
 	this._height = height;
 
-	this.el.headers = this.el.root
-			.attr("class", "controller position-sticky sticky-top mx-auto noselect")
-		.selectAll("g")
+	d3.select(this.el.root.node().parentNode)
+			.attr("class", "controller position-sticky sticky-top mx-auto noselect");
+
+	this.el.headers = this.el.root.selectAll("g")
 			.data(this.data.headers)
 		.enter().append("g")
 			.attr("class", "controller-btn")

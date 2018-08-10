@@ -63,18 +63,17 @@ Table.prototype.height = function(height){
 }
 
 Table.prototype.updateCells = function(){
-	var data = this.data.current.map(function(column){ return column.filter(function(d){ return d.visible; }); });
+	this.updateSize();
 
 	this.el.cells
 		.attr("class", function(d){ return "cell cell-col-" + d.col + " cell-row-" + d.row; })
-	
-	this.el.cells.selectAll("rect")
-		.attr("fill", function(d){ return d.color; });
-		
-	this.el.cells.selectAll("text")
-		.text(function(d){ return d.value; });
-
-	this.updateSize();
+		.each(function(d){
+			var cell = d3.select(this)
+				.attr("class", function(d){ return "cell cell-col-" + d.col + " cell-row-" + d.row; });
+			
+			cell.select("rect").style("fill", function(d){ return d.color; });
+			cell.select("text").text(function(d){ return d.value; });
+		});
 }
 
 Table.prototype.updateSize = function(){
@@ -96,7 +95,7 @@ Table.prototype.updateSize = function(){
 	var finalHeight;
 
 	this.el.columns
-		.each(function(d){
+		.each(function(column){
 			var nestedHeight = 0;
 			d3.select(this).selectAll("g")
 				.each(function(d){
@@ -126,7 +125,7 @@ Table.prototype.onHighlight = function(row, color){
 	this.el.cells.filter(".cell-row-" + row)
 			.classed("cell-active", !!color)
 		.selectAll("rect")
-			.attr("fill", color);
+			.style("fill", color);
 }
 
 Table.prototype.onMouseOver = function(row){
@@ -140,7 +139,5 @@ Table.prototype.onMouseOut = function(row){
 }
 
 Table.prototype.onFilter = function(rows){
-	// this.el.cells.style("display", "block");
-	// rows.forEach(row => this.el.columns.selectAll(".cell-row-" + row).style("display", "none"));
 	this.updateCells();
 }
