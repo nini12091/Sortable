@@ -160,11 +160,15 @@ function Controller(options){
 
 	this.el.headers.append("rect");
 
-	this.el.headers.append("text")
+	this.el.texts = this.el.headers.append("text")
+			.attr("class", "header-text")
 			.text(function(header){ return header.name; });
 
-	this.el.sorts = this.el.headers
-		.append("i");
+	this.el.sorts = this.el.headers.append("text")
+			.attr("class", "header-icon")
+			.attr("font-family", "FontAwesome")
+			.attr("text-anchor", "end")
+			.attr("dominant-baseline", "central");
 
 	this.updateSize();
 
@@ -174,9 +178,9 @@ function Controller(options){
 Controller.prototype.el = {};
 
 Controller.prototype.onSort = function(sort, header, order){
-	this.el.sorts.attr("class", (header) => {
-		return header.order === this.data.ascend ? "fa fa-angle-up"
-		: header.order === this.data.descend ? "fa fa-angle-down"
+	this.el.sorts.text((header) => {
+		return header.order === this.data.ascend ? "\uf106"
+		: header.order === this.data.descend ? "\uf107"
 		: "";
 	});
 }
@@ -207,22 +211,29 @@ Controller.prototype.updateSize = function(){
 
 	var nestedWidth = 0;
 	var length = this.data.headers.length;
-	this.el.headers.selectAll("rect")
-		.attr("height", height)
+	this.el.headers
 		.each(function(header){
 			d3.select(this)
-				.attr("x", nestedWidth)
-				.attr("width", (header) => {
-					header.x = nestedWidth;
-					header.width = (header.weight / length) * width
-					nestedWidth += header.width;
-					return header.width;
-				});
+				.attr("transform", "translate(" + nestedWidth + ")")
+				.select("rect")
+					.attr("height", height)
+					.attr("width", (header) => {
+						header.x = nestedWidth;
+						header.width = (header.weight / length) * width
+						nestedWidth += header.width;
+						return header.width;
+					});
 		});
 
-	this.el.headers.selectAll("text")
+	this.el.texts
 		.attr("x", function(header){
-			return header.x + header.width / 2;
+			return header.width / 2;
+		})
+		.attr("y", height / 2);
+
+	this.el.sorts
+		.attr("x", function(header){
+			return header.width - 12;
 		})
 		.attr("y", height / 2);
 }

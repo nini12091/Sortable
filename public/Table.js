@@ -126,7 +126,7 @@ Table.prototype.onHighlight = function(row, color){
 	this.el.cells.filter(".cell-row-" + row)
 			.classed("cell-active", !!color)
 		.selectAll("rect")
-			.style("fill", color);
+			.attr("fill", color);
 }
 
 Table.prototype.onMouseOver = function(row){
