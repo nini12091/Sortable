@@ -10,7 +10,7 @@ function Data(_data){
 	this.call = (event, ...args) => this.dispatcher.call(event, this, ...args);
 
 	// default sort method
-	this.sort = this.sortRelative;
+	this.sort = this.sortParallel;
 }
 
 Data.prototype.el = {};
@@ -26,7 +26,11 @@ Data.prototype.init = function(data){
 		headers[name] = {
 			col: col,
 			name: name,
-			sort: null // sort status
+			order: null, // sort order status
+			isNumericData: name !== "name",
+			weight: 1,
+			width: 0,
+			x: 0
 		};
 		headerIds[name] = col;
 		newFormat[name] = [];
@@ -36,9 +40,10 @@ Data.prototype.init = function(data){
 		d3.keys(d).forEach(function(name){
 			d[name] = {
 				name: name,
+				header: headers[name],
 				row: row,
 				col: headerIds[name],
-				value: headerIds[name] != 0 ? +d[name] : d[name], // parse as number except field "name"
+				value: headerIds[name].isNumericData ? +d[name] : d[name],
 				visible: true,
 				active: false,
 				color: null
@@ -70,30 +75,34 @@ Data.prototype.sortRelative = function(header, order){
 			return order(targetCol[a.row], targetCol[b.row]);
 		});
 	});
-	this.headers.forEach(function(_header){
-		header.sort = _header.col === header.col ? order : null;
+	this.headers.forEach(function(header){
+		header.order = null;
 	});
+	header.order = order;
+
 	this.call("sort", this.sortRelative, header, order);
 }
 
 Data.prototype.sortParallel = function(header, order){
 	this.current[header.col].sort(order);
 
-	header.sort = odrer;
+	header.order = order;
 	this.call("sort", this.sortParallel, header, order);
 }
 
-Data.prototype.pickColor = function(row){
-	return d3.interpolateSinebow(row / this.origin.length);
-}
+Data.prototype.colors = d3.schemeCategory10.map(function(d){ return d; });
+Data.prototype.colorIndex = 0;
 
 Data.prototype.highlights = {};
 
 Data.prototype.highlight = function(row){
 	if(this.highlights[row]){
+		this.colors.unshift(this.highlights[row]);
 		this.highlights[row] = null;
 	}else{
-		this.highlights[row] = this.pickColor(row);
+		if(this.colors.length === 0) return;
+
+		this.highlights[row] = this.colors.shift();
 	}
 	this.current.forEach((column) => {
 		column.forEach((d) => {
@@ -112,5 +121,12 @@ Data.prototype.mouseout = function(row){
 }
 
 Data.prototype.filter = function(rows){
-	this.call("hide", rows);
+	var r = {};
+	rows.forEach(function(row){ r[row] = true; });
+	this.current.forEach((column) => {
+		column.forEach((d) => {
+			d.visible = !(d.row in r);
+		});
+	});
+	this.call("filter", rows);
 }

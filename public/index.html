@@ -19,17 +19,28 @@
 			color: white;
 		}
 
-		th:hover {
-			opacity: 0.9;
+		.cell {
+			text-align: center;
 		}
 
-		td {
+		.cell > rect {
+			fill: white;
+			stroke: lightgray;
+			stroke-width: 1px;
+		}
+
+		.cell > text {
+			fill: black;
 			font-size: 0.7em;
+			white-space: nowrap;
+			text-overflow: clip;
+			text-anchor: middle;
+			alignment-baseline: central;
 		}
 
 		/* 셀이 hovering 되었을 때의 클래스입니다 */
-		.cell-hover {
-			background-color: #f2f2f2;
+		.cell-hover > rect {
+			fill: #f2f2f2;
 		}
 
 		/* Ascending, Descending 정렬 버튼을 위한 클래스입니다 */
@@ -39,17 +50,17 @@
 
 		/* 셀이 클릭되었을 때의 클래스입니다 */
 		.cell-active {
-
+			color: white;
 		}
 
 		/* PC에서 line이 hovering되었을 때의 클래스입니다 */
 		.line-hover {
-			stroke: blue;
+			stroke-width: 2;
 		}
 
 		/* PC에서 line이 클릭되었을 때의 클래스입니다 */
 		.line-active {
-			stroke-width: 2;
+			stroke-width: 3;
 		}
 
 		/* 텍스트 드래그 방지를 위한 클래스입니다 */
@@ -71,12 +82,26 @@
 			stroke: steelblue;
 		}
 
-		.controller {
-
+		.controller-btn {
+			color: #f2f2f2;
+			fill: #333;
+			opacity: 0.9;
+			text-align: center;
+			padding: 8px;
 		}
 
-		.controller:hover {
-			opacity: 0.9;
+		.controller-btn > rect{
+			stroke: white;
+		}
+
+		.controller-btn > text{
+			fill: white;
+			text-anchor: middle;
+			alignment-baseline: central;
+		}
+
+		.controller-btn:hover {
+			opacity: 1;
 		}
 	</style>
 </head>
@@ -98,7 +123,7 @@
 
 		<div id="layout">
 			<!-- parallel coordinates -->
-			<svg id="pc" width="960" height="540"></svg>
+			<div id="pc" class="noselect"></div>
 
 			<!-- sortable -->
 			<div id="sortable"></div>
@@ -111,40 +136,111 @@
 <script src="PC.js"></script>
 <script type="text/javascript">
 
-function Controller(controller, data){
-	this.el.root = d3.select(controller);
-	this.data = data;
+function Controller(options){
+	var bindto = options.bindto;
+	var data = options.data;
+	var height = options.height || 40;
 
-	this.el.root.attr("class", "controller position-sticky sticky-top mx-auto")
-			.style("background-color", "#333")
-			.style("color", "#f2f2f2")
-			.style("width", "100%")
-		.selectAll("div")
+	this.el.root = d3.select(bindto).append("svg");
+	this.data = data;
+	this._height = height;
+
+	this.el.headers = this.el.root
+			.attr("class", "controller position-sticky sticky-top mx-auto noselect")
+		.selectAll("g")
 			.data(this.data.headers)
-		.enter().append("div")
-			.style("display", "inline-block")
-			.style("width", 100 / this.data.headers.length + "%")
-			.style("text-align", "center")
-			.style("padding", "8px")
+		.enter().append("g")
+			.attr("class", "controller-btn")
+			.on("click", (header) => {
+				this.data.sort(header, 
+					header.order === this.data.ascend ? this.data.descend
+					: header.order === this.data.descend ? this.data.ascend
+					: this.data.ascend);
+			});
+
+	this.el.headers.append("rect");
+
+	this.el.headers.append("text")
 			.text(function(header){ return header.name; });
-			// .on("mouseover", (header) => {
-			// 	this.data.dispatch("hoverstart", header);
-			// })
-			// .on("mouseout", (header) => {
-			// 	this.data.dispatch("hoverend", header);
-			// });
+
+	this.el.sorts = this.el.headers
+		.append("i");
+
+	this.updateSize();
+
+	this.data.on("sort.controller", (...args) => this.onSort(...args));
 }
 
 Controller.prototype.el = {};
 
-function Container(div, data){
-	this.el.root = d3.select(div);
+Controller.prototype.onSort = function(sort, header, order){
+	this.el.sorts.attr("class", (header) => {
+		return header.order === this.data.ascend ? "fa fa-angle-up"
+		: header.order === this.data.descend ? "fa fa-angle-down"
+		: "";
+	});
+}
+
+Controller.prototype.width = function(width){
+	if(width){
+		this._width = width;
+		this.updateSize();
+	}
+	else return this._width;
+}
+
+Controller.prototype.height = function(height){
+	if(height){
+		this._height = height;
+		this.updateSize();
+	}
+	else return this._height;
+}
+
+Controller.prototype.updateSize = function(){
+	var width = this._width, height = this._height;
+	if(width === undefined || height === undefined) return;
+
+	this.el.root
+		.attr("width", width)
+		.attr("height", height);
+
+	var nestedWidth = 0;
+	var length = this.data.headers.length;
+	this.el.headers.selectAll("rect")
+		.attr("height", height)
+		.each(function(header){
+			d3.select(this)
+				.attr("x", nestedWidth)
+				.attr("width", (header) => {
+					header.x = nestedWidth;
+					header.width = (header.weight / length) * width
+					nestedWidth += header.width;
+					return header.width;
+				});
+		});
+
+	this.el.headers.selectAll("text")
+		.attr("x", function(header){
+			return header.x + header.width / 2;
+		})
+		.attr("y", height / 2);
+}
+
+function Container(options){
+	var bindto = options.bindto;
+	var data = options.data;
+
+	this.el.root = d3.select(bindto);
 	this.data = data;
 
-	this.controllers.headers = new Controller("#controller", data);
+	this.controllers.headers = new Controller({
+		bindto: "#controller",
+		data: this.data
+	});
 
 	// default
-	this.resize = this.horizontal;
+	this.resize = this.vertical;
 	this.resize();
 
 	// handle window resize
@@ -159,28 +255,40 @@ Container.prototype.controllers = {};
 
 Container.prototype.horizontal = function(){
 	this.el.root.attr("class", "row");
-	var rect = this.el.root.node().parentNode.getBoundingClientRect(); // get real size
+	d3.values(this.controllers).forEach((controller) => {
+		this.updateSize(controller);
+	});
 	this.childrens.forEach((children) => {
 		d3.select(children.el.root.node().parentNode).attr("class", "col-6");
-		var childrect = children.el.root.node().parentNode.getBoundingClientRect();
-		children.width(childrect.width);
-		children.height(childrect.height);
+		this.updateSize(children);
 	});
 	this.resize = this.horizontal;
 }
 
 Container.prototype.vertical = function(){
-	this.el.root.attr("class", "container");
+	this.el.root.attr("class", "row");
+	d3.values(this.controllers).forEach((controller) => {
+		this.updateSize(controller);
+	});
+	this.childrens.forEach((children) => {
+		d3.select(children.el.root.node().parentNode).attr("class", "col-12");
+		this.updateSize(children);
+	});
 	this.resize = this.vertical;
 }
 
 Container.prototype.addChildren = function(children){
-	this.el.root.append("div").append(function(){
-		return children.el.root.remove().node();
-	});
+	// this.el.root.append("div").append(function(){
+	// 	return children.el.root.remove().node();
+	// });
 	this.childrens.push(children);
 
 	this.resize();
+}
+
+Container.prototype.updateSize = function(children){
+	var childrect = children.el.root.node().parentNode.getBoundingClientRect();
+	children.width(childrect.width);
 }
 
 var container;
@@ -192,9 +300,18 @@ d3.csv("data.csv").then(function(_data){
 	data = new Data(_data);
 
 	// plot
-	container = new Container("#layout", data);
-	table = new Table("#sortable", data);
-	pc = new PC("#pc", data);
+	container = new Container({
+		bindto: "#layout",
+		data: data
+	});
+	table = new Table({
+		bindto: "#sortable",
+		data: data
+	});
+	pc = new PC({
+		bindto: "#pc",
+		data: data
+	});
 
 	container.addChildren(pc);
 	container.addChildren(table);
