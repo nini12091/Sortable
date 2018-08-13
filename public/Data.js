@@ -2,10 +2,10 @@ function Data(_data){
 	this.init(_data);
 
 	// clone ... for filtered data
-	this.current = this.origin.map(function(d){ return d; });
+	this.current = this.safeClone();
 
 	// event emit
-	this.dispatcher = d3.dispatch("sort", "highlight", "mouseover", "mouseout", "filter");
+	this.dispatcher = d3.dispatch("sort", "highlight", "mouseover", "mouseout", "filter", "reset");
 	this.on = (...args) => this.dispatcher.on(...args);
 	this.call = (event, ...args) => this.dispatcher.call(event, this, ...args);
 
@@ -38,12 +38,13 @@ Data.prototype.init = function(data){
 	data.forEach(function(d, row){
 		// cell's format
 		d3.keys(d).forEach(function(name){
+			var header = headers[name];
 			d[name] = {
 				name: name,
-				header: headers[name],
+				header: header,
 				row: row,
-				col: headerIds[name],
-				value: headerIds[name].isNumericData ? +d[name] : d[name],
+				col: header.col,
+				value: header.isNumericData ? +d[name] : d[name],
 				visible: true,
 				active: false,
 				color: null
@@ -55,21 +56,36 @@ Data.prototype.init = function(data){
 	this.origin = d3.values(newFormat);
 }
 
+Data.prototype.safeClone = function(initialCallback){
+	if(initialCallback) return this.origin.map(column => column.map(d => initialCallback(d)));
+	return this.origin.map(column => column.map(d => d));
+}
+
 Data.prototype.reset = function(){
-	this.current = this.origin.map(function(d){ return d; });
+	this.current = this.safeClone(d => {
+		d.visible = true;
+		d.active = false;
+		d.color = null;
+		return d;
+	});
+	this.highlights = {};
+	this.colors = this.colorsOrigin.map(d => d);
+	this.headers.forEach(header => {
+		header.order = null;
+	});
 	this.call("reset");
 }
 
 Data.prototype.ascend = function(a, b){
-	return (a.value > b.value ? true : a.value < b.value ? false : a.id > b.id) ^ true ? -1 : 1;
+	return a.value > b.value ? 1 : a.value < b.value ? -1 : a.row > b.row ? 1 : -1;
 }
 
 Data.prototype.descend = function(a, b){
-	return (a.value > b.value ? true : a.value < b.value ? false : a.id > b.id) ^ false ? -1 : 1;
+	return a.value < b.value ? 1 : a.value > b.value ? -1 : a.row < b.row ? 1 : -1;
 }
 
 Data.prototype.sortRelative = function(header, order){
-	var targetCol = this.current[header.col];
+	var targetCol = this.origin[header.col];
 	this.current = this.current.map(function(column){
 		return column.sort(function(a, b){
 			return order(targetCol[a.row], targetCol[b.row]);
@@ -90,6 +106,7 @@ Data.prototype.sortParallel = function(header, order){
 	this.call("sort", this.sortParallel, header, order);
 }
 
+Data.prototype.colorsOrigin = d3.schemeCategory10.map(function(d){ return d; });
 Data.prototype.colors = d3.schemeCategory10.map(function(d){ return d; });
 Data.prototype.colorIndex = 0;
 
@@ -100,7 +117,7 @@ Data.prototype.highlight = function(row){
 		this.colors.unshift(this.highlights[row]);
 		this.highlights[row] = null;
 	}else{
-		if(this.colors.length === 0) return;
+		if(this.colors.length === 0) return alert("선택할 수 있는 최대치를 초과하였습니다!! (최대 10개)");
 
 		this.highlights[row] = this.colors.shift();
 	}

@@ -49,7 +49,11 @@
 
 		/* 셀이 클릭되었을 때의 클래스입니다 */
 		.cell-active {
-			color: white;
+
+		}
+
+		.cell-active > text {
+			fill: white;
 		}
 
 		/* PC에서 line이 hovering되었을 때의 클래스입니다 */
@@ -71,6 +75,10 @@
 			user-select: none;    
 		}
 
+		.nopadding {
+			padding: 0 !important;
+		}
+
 		.background {
 			fill: none;
 			stroke: lightgray;
@@ -87,14 +95,18 @@
 
 		.controller-btn {
 			color: #f2f2f2;
-			fill: #333;
 			opacity: 0.9;
 			text-align: center;
 			padding: 8px;
 		}
 
-		.controller-btn > rect{
+		.controller-btn > .controller-btn-rect {
+			fill: #333;
 			stroke: white;
+		}
+
+		.controller-size-handle {
+			fill: gray;
 		}
 
 		.controller-btn > text{
@@ -105,6 +117,20 @@
 
 		.controller-btn:hover {
 			opacity: 1;
+		}
+
+		.tooltip {
+			color: white;
+			padding: 12px;
+			background-color: #333;
+			opacity: 0;
+			position: absolute;
+			pointer-events: none;
+			border-radius: 4px;
+		}
+
+		.tooltip-field {
+			display: block;
 		}
 	</style>
 </head>
@@ -135,21 +161,26 @@
 function Controller(options){
 	var bindto = options.bindto;
 	var data = options.data;
+	var container = options.container;
 	var titleHeight = options.titleHeight || 60;
-	var toolsWidth = options.toolsWidth || 90;
+	var toolsWidth = options.toolsWidth || 180;
 	var toolsHeight = options.toolsHeight || 30;
 	var headersHeight = options.headersHeight || 40;
+	var sizeHandleWidth = options.sizeHandleWidth || 8;
 
-	this.el.root = d3.select(bindto).append("svg");
+	this.el.root = d3.select(bindto);
 	this.data = data;
+	this.container = container;
 	this._height = titleHeight + toolsHeight + headersHeight;
 	this.titleHeight = titleHeight;
 	this.toolsHeight = toolsHeight;
 	this.toolsWidth = toolsWidth;
 	this.headersHeight = headersHeight;
+	this.sizeHandleWidth = sizeHandleWidth;
 
-	d3.select(this.el.root.node().parentNode)
-			.attr("class", "controller position-sticky sticky-top mx-auto noselect");
+	this.el.root.attr("class", "controller position-sticky sticky-top noselect");
+
+	this.el.root = this.el.root.append("div").append("svg");
 
 	this.el.title = this.el.root.append("g");
 
@@ -161,19 +192,25 @@ function Controller(options){
 			.attr("transform", "translate(0," + this.titleHeight + ")")
 			.selectAll("g")
 			.data([
-				{ name: "Reset", onclick: () => { this.reset(); } }
+				{ name: "Reset", onclick: () => { this.reset(); } },
+				{ name: "Sort:Relative", onclick: () => { this.data.sort = this.data.sortRelative; } },
+				{ name: "Sort:Parallel", onclick: () => { this.data.sort = this.data.sortParallel; } },
+				{ name: "Layout:Horizontal", onclick: () => { this.container.horizontal(); } },
+				{ name: "Layout:Vertical", onclick: () => { this.container.vertical(); } }
 			])
 		.enter().append("g")
 			.attr("class", "controller-btn")
+			.attr("transform", (d, i) => { return "translate(" + this.toolsWidth * i + ")"; })
 			.on("click", function(d){ d.onclick(); });
 
 	this.el.tools.append("rect")
+		.attr("class", "controller-btn-rect")
 		.attr("width", this.toolsWidth)
 		.attr("height", this.toolsHeight);
 
 	this.el.tools.append("text")
 		.text(function(d){ return d.name; })
-		.attr("x", (d, i) => { return i * this.toolsWidth + this.toolsWidth / 2; })
+		.attr("x", this.toolsWidth / 2)
 		.attr("y", this.toolsHeight / 2);
 
 	this.el.headers = this.el.root.append("g")
@@ -189,6 +226,7 @@ function Controller(options){
 			});
 
 	this.el.headers.append("rect")
+			.attr("class", "controller-btn-rect")
 			.attr("height", this.headersHeight);
 
 	this.el.texts = this.el.headers.append("text")
@@ -203,12 +241,32 @@ function Controller(options){
 			.attr("dominant-baseline", "central")
 			.attr("y", this.headersHeight / 2);
 
+	// this.el.sizeHandle = this.el.root.append("g")
+	// 		.selectAll("g")
+	// 		.data(this.data.headers)
+	// 	.enter().append("g")
+	// 		.attr("class", "controller-size-handle")
+	// 		.call(d3.drag()
+	// 			.subject(function(){ return this; })
+	// 			.on("start", () => {
+	// 				console.log(d3.event.x);
+	// 			}));
+
+	// this.el.sizeHandle.append("rect")
+	// 		.attr("height", this.headersHeight)
+	// 		.attr("width", this.sizeHandleWidth);
+
 	this.updateSize();
 
 	this.data.on("sort.controller", (...args) => this.onSort(...args));
+	this.data.on("reset.controller", (...args) => this.onReset(...args));
 }
 
 Controller.prototype.el = {};
+
+Controller.prototype.reset = function(){
+	this.data.reset();
+}
 
 Controller.prototype.onSort = function(sort, header, order){
 	this.el.sorts.text((header) => {
@@ -216,6 +274,10 @@ Controller.prototype.onSort = function(sort, header, order){
 		: header.order === this.data.descend ? "\uf107"
 		: "";
 	});
+}
+
+Controller.prototype.onReset = function(){
+	this.el.sorts.text("");
 }
 
 Controller.prototype.width = function(width){
@@ -248,23 +310,19 @@ Controller.prototype.updateSize = function(){
 	var length = this.data.headers.length;
 	this.el.headers
 		.each(function(header){
-			d3.select(this)
-				.attr("transform", "translate(" + nestedWidth + "," + (self.titleHeight + self.toolsHeight) +  ")")
-				.select("rect")
-					.attr("width", (header) => {
-						header.x = nestedWidth;
-						header.width = (header.weight / length) * width
-						nestedWidth += header.width;
-						return header.width;
-					});
+			var el = d3.select(this)
+					.attr("transform", "translate(" + nestedWidth + "," + (self.titleHeight + self.toolsHeight) +  ")");
+
+			header.x = nestedWidth;
+			header.width = (header.weight / length) * width
+			nestedWidth += header.width;
+			
+			el.select(".controller-btn-rect")
+					.attr("width", header.width);
 		});
 
-	this.el.texts
-		.attr("x", function(header){ return header.width / 2; })
-
-	this.el.sorts
-		.attr("x", function(header){ return header.width - 12; })
-		.attr("y", height / 2);
+	this.el.texts.attr("x", function(header){ return header.width / 2; });
+	this.el.sorts.attr("x", function(header){ return header.width - 12; });
 }
 
 function Container(options){
@@ -276,7 +334,8 @@ function Container(options){
 
 	this.controllers.headers = new Controller({
 		bindto: "#controller",
-		data: this.data
+		data: this.data,
+		container: this
 	});
 
 	// default
@@ -294,12 +353,13 @@ Container.prototype.childrens = [];
 Container.prototype.controllers = {};
 
 Container.prototype.horizontal = function(){
-	this.el.root.attr("class", "row");
+	this.el.root.attr("class", "row nopadding");
 	d3.values(this.controllers).forEach((controller) => {
+		d3.select(controller.el.root.node().parentNode).attr("class", "col-6 nopadding");
 		this.updateSize(controller);
 	});
 	this.childrens.forEach((children) => {
-		d3.select(children.el.root.node().parentNode).attr("class", "col-6");
+		d3.select(children.el.root.node().parentNode).attr("class", "col-6 nopadding");
 		this.updateSize(children);
 	});
 	this.resize = this.horizontal;
@@ -308,6 +368,7 @@ Container.prototype.horizontal = function(){
 Container.prototype.vertical = function(){
 	this.el.root.attr("class", "row");
 	d3.values(this.controllers).forEach((controller) => {
+		d3.select(controller.el.root.node().parentNode).attr("class", "");
 		this.updateSize(controller);
 	});
 	this.childrens.forEach((children) => {
@@ -317,10 +378,19 @@ Container.prototype.vertical = function(){
 	this.resize = this.vertical;
 }
 
+Container.prototype.switch = function(){
+	this.el.root.attr("class", "row");
+	d3.values(this.controllers).forEach((controller) => {
+		this.updateSize(controller);
+	});
+	this.childrens.forEach((children) => {
+		d3.select(children.el.root.node().parentNode).attr("class", "col-12");
+		this.updateSize(children);
+	});
+	this.resize = this.switch;
+}
+
 Container.prototype.addChildren = function(children){
-	// this.el.root.append("div").append(function(){
-	// 	return children.el.root.remove().node();
-	// });
 	this.childrens.push(children);
 
 	this.resize();
@@ -337,6 +407,10 @@ var data;
 
 // Load data from assets
 d3.csv("data.csv").then(function(_data){
+	applyData(_data);
+});
+
+function applyData(_data){
 	data = new Data(_data);
 
 	// plot
@@ -355,7 +429,7 @@ d3.csv("data.csv").then(function(_data){
 
 	container.addChildren(pc);
 	container.addChildren(table);
-});
+}
 
 </script>
 </html>

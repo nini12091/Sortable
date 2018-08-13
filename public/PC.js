@@ -6,11 +6,13 @@ function PC(options){
 	var data = options.data;
 	var width = options.width || 960;
 	var height = options.height || 540;
+	var margin = options.margin || { top: 10, right: 0, bottom: 10, left: 0 };
 
 	this.el.root = d3.select(bindto).append("svg");
 	this.data = data;
 	this._width = width;
 	this._height = height;
+	this.margin = margin;
 
 	// this._width = this._width - this.margin.left - this.margin.right;
 	// this._height = this._height - this.margin.top - this.margin.bottom;
@@ -27,6 +29,8 @@ function PC(options){
 			.domain(d3.extent(this.data.origin[header.col], function(d){ return +d.value; }))
 			.range([this.height(), 0])
 			.nice();
+
+		this.y[header.col].header = header;
 	});
 
 	this.el.background = this.el.g.append("g")
@@ -56,45 +60,18 @@ function PC(options){
 			.data(this.headers)
 		.enter().append("g")
 			.attr("class", "header");
-			// .call(d3.drag()
-			// 	.subject(() => { return d3.select(this); })
-			// 	.on("start", (header) => {
-			// 		this.dragging[header.col] = this.x(header.col);
-			// 		this.el.background.attr("visibility", "hidden");
-			// 	})
-			// 	.on("drag", (header) => {
-			// 		this.dragging[header.col] = Math.min(this.width(), Math.max(-1, d3.event.x));
-			// 		this.el.foreground.attr("d", (d) => this.path(d));
-
-			// 		// Update headers order
-			// 		this.data.headers = [this.data.headers[0]].concat(this.headers.sort((a, b) => { return this.position(a) - this.position(b); }));
-
-			// 		this.x.domain(this.headers.map(function(header){ return header.col; }));
-			// 		this.el.axis.attr("transform", (header) => { return "translate(" + this.position(header) + ")"; });
-			// 	})
-			// 	.on("end", function(header){
-			// 		delete self.dragging[header.col];
-			// 		d3.select(this).transition().attr("transform", "translate(" + self.x(header.col) + ")");
-			// 		self.el.foreground.transition().attr("d", (d) => self.path(d));
-			// 		self.el.background
-			// 				.attr("d", (d) => self.path(d))
-			// 			.transition()
-			// 				.delay(500)
-			// 				.duration(0)
-			// 				.attr("visibility", null);
-			// 	}));
 
 	this.el.axis.append("g")
 			.attr("class", "axis")
 			.each(function(header){
 				d3.select(this).call(self.axis.scale(self.y[header.col]));
-			})
-		.append("text")
-			.style("text-anchor", "middle")
-			.style("font-size", "1.5em")
-			.attr("fill", "black")
-			.attr("y", -9)
-			.text(function(header){ return header.name; });
+			});
+		// .append("text")
+		// 	.style("text-anchor", "middle")
+		// 	.style("font-size", "1.5em")
+		// 	.attr("fill", "black")
+		// 	.attr("y", -9)
+		// 	.text(function(header){ return header.name; });
 
 	this.el.brush = this.el.axis.append("g")
 		.attr("class", "brush")
@@ -105,15 +82,31 @@ function PC(options){
 
 	this.updateLines();
 
-	// this.data.on("sort.pc", (...args) => this.onSort(...args));
+	this.el.tooltip = d3.select("body").append("div")
+			.attr("class", "tooltip");
+
+	this.el.root.on("mouseover", () => {
+		this.el.tooltip.style("display", null);
+	});
+
+	this.el.root.on("mouseout", () => {
+		this.el.tooltip.style("display", "none");
+	});
+
+	this.el.root.on("mousemove", () => {
+		this.el.tooltip
+			.style("top", d3.event.pageY + "px")
+			.style("left", d3.event.pageX + "px");
+	})
+
+	this.data.on("sort.pc", (...args) => this.onSort(...args));
 	this.data.on("highlight.pc", (...args) => this.onHighlight(...args));
 	this.data.on("mouseover.pc", (...args) => this.onMouseOver(...args));
 	this.data.on("mouseout.pc", (...args) => this.onMouseOut(...args));
+	this.data.on("reset.pc", (...args) => this.onReset(...args));
 }
 
 PC.prototype.el = {};
-
-PC.prototype.margin = { top: 40, right: 10, bottom: 20, left: 20 };
 
 PC.prototype.axis = d3.axisLeft();
 
@@ -147,13 +140,6 @@ PC.prototype.brush = function(header){
 		});
 		this.data.filter(rows);
 	};
-}
-
-PC.prototype.reset = function(){
-	var self = this;
-	this.el.brush.each(function(header){
-		d3.select(this).call(self.y[header.col].brush.move, null);
-	});
 }
 
 PC.prototype.updateLines = function(){
@@ -193,7 +179,12 @@ PC.prototype.updateSize = function(){
 	height = height - this.margin.top - this.margin.bottom;
 
 	this.x.range([0, width]);
-	d3.values(this.y).forEach((y) => { y.range([0, height]); });
+	d3.values(this.y).forEach((y) => {
+		var order = y.header.order;
+		y.range(order === this.data.ascend ? [0, height]
+			: order === this.data.descend ? [height, 0]
+			: [0, height]);
+	});
 
 	this.updateLines();
 
@@ -208,7 +199,7 @@ PC.prototype.updateSize = function(){
 }
 
 PC.prototype.onSort = function(sort, header, order){
-	if(!header.isNumericData) return; // ignore non-numeric data
+	// if(!header.isNumericData) return; // ignore non-numeric data
 
 	var ascend = function(a, b){ return a - b; }, descend = function(a, b){ return b - a; };
 
@@ -218,10 +209,10 @@ PC.prototype.onSort = function(sort, header, order){
 			y.range(y.range().sort(ascend));
 		});
 	}
-	var y = this.y[header.col];
-	y.range(y.range().sort(order === this.data.ascend ? ascend : descend));
-
-	console.log(y.range());
+	if(header.isNumericData){
+		var y = this.y[header.col];
+		y.range(y.range().sort(order === this.data.ascend ? ascend : descend));
+	}
 
 	var self = this;
 	this.el.axis.each(function(header){
@@ -239,9 +230,49 @@ PC.prototype.onHighlight = function(row, color){
 PC.prototype.onMouseOver = function(row){
 	this.el.foreground.filter(".line-row-" + row)
 		.classed("line-hover", true);
+
+	var fields = this.el.tooltip.style("opacity", 0.7)
+			.selectAll("div")
+			.data(this.data.origin.map(column => column[row]));
+
+	fields.enter().append("div");
+
+	fields.attr("class", "tooltip-field")
+			.text(function(d){ return d.header.name + ": " + d.value; });
+
+	fields.exit().remove();
 }
 
 PC.prototype.onMouseOut = function(row){
 	this.el.foreground.filter(".line-row-" + row)
 		.classed("line-hover", false);
+
+	this.el.tooltip.style("opacity", 0);
+}
+
+PC.prototype.onReset = function(){
+	var self = this;
+	this.el.foreground
+		.style("stroke", null)
+		.classed("line-active", false);
+
+	this.el.brush.each(function(header){
+		d3.select(this).call(self.y[header.col].brush.move, null);
+	});
+
+	var height = this._height - this.margin.top - this.margin.bottom;
+
+	d3.values(this.y).forEach((y) => {
+		var order = y.header.order;
+		y.range(order === this.data.ascend ? [0, height]
+			: order === this.data.descend ? [height, 0]
+			: [0, height]);
+	});
+
+	this.updateLines();
+
+	var self = this;
+	this.el.axis.each(function(header){
+		d3.select(this).call(self.axis.scale(self.y[header.col]));
+	});
 }

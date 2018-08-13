@@ -42,6 +42,7 @@ function Table(options){
 	this.data.on("mouseover.table", (...args) => this.onMouseOver(...args));
 	this.data.on("mouseout.table", (...args) => this.onMouseOut(...args));
 	this.data.on("filter.table", (...args) => this.onFilter(...args));
+	this.data.on("reset.table", (...args) => this.onReset(...args));
 }
 
 Table.prototype.el = {};
@@ -69,7 +70,7 @@ Table.prototype.updateCells = function(){
 		.attr("class", function(d){ return "cell cell-col-" + d.col + " cell-row-" + d.row; })
 		.each(function(d){
 			var cell = d3.select(this)
-				.attr("class", function(d){ return "cell cell-col-" + d.col + " cell-row-" + d.row; });
+				.attr("class", function(d){ return "cell cell-col-" + d.col + " cell-row-" + d.row + (d.color ? " cell-active" : ""); });
 			
 			cell.select("rect").style("fill", function(d){ return d.color; });
 			cell.select("text").text(function(d){ return d.value; });
@@ -139,5 +140,17 @@ Table.prototype.onMouseOut = function(row){
 }
 
 Table.prototype.onFilter = function(rows){
+	this.updateCells();
+}
+
+Table.prototype.onReset = function(){
+	this.el.cells
+			.classed("cell-active", false)
+		.selectAll("rect")
+			.style("fill", null);
+
+	this.el.columns.data(this.data.current);
+	this.el.cells.data(function(d){ return d; });
+	
 	this.updateCells();
 }
